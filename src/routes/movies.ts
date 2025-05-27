@@ -1,12 +1,11 @@
 import { ClientError } from '../lib/client-error';
 import express from 'express';
 import pg from 'pg';
+import 'dotenv/config';
 
 const db = new pg.Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: {
-        rejectUnauthorized: false,
-    },
+    ssl: false
 });
 
 const router = express.Router();
@@ -94,7 +93,7 @@ router.post('/movies', async (req, res, next) => {
 });
 
 // PUT to update a property
-router.put('/:movieId', async (req, res, next) => {
+router.put('/movies/:movieId', async (req, res, next) => {
     try {
         const id = Number(req.params.movieId);
         if (!id) {
@@ -137,7 +136,7 @@ router.put('/:movieId', async (req, res, next) => {
 });
 
 // DELETE a movie
-router.delete('/:movieId', async (req, res, next) => {
+router.delete('/movies/:movieId', async (req, res, next) => {
     try {
         const id = Number(req.params.movieId);
         if (!id) {
