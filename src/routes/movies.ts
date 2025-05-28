@@ -4,9 +4,16 @@ import express from 'express';
 import pg from 'pg';
 import 'dotenv/config';
 
+type Movie = {
+    id: number;
+    title: string;
+    summary: string;
+    imdbLink: string;
+    rating: number;
+}
+
 const db = new pg.Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: false
 });
 
 const router = express.Router();
