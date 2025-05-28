@@ -1,4 +1,5 @@
 import { ClientError } from '../lib/client-error';
+import { authMiddleware } from '../lib/authorization-middleware';
 import express from 'express';
 import pg from 'pg';
 import 'dotenv/config';
@@ -9,15 +10,26 @@ const db = new pg.Pool({
 });
 
 const router = express.Router();
+router.use(authMiddleware)
 
 // GET all movies for a user
 router.get('/movies', async (req, res, next) => {
     try {
+
+        // Verify user is authenticated
+        const userId = Number(req.user?.userId);
+        if (!userId) {
+            console.warn(`Invalid userId provided: ${req.user?.userId}`);
+
+            throw new ClientError(400, 'userId is required');
+        }
+
         const sql = `
         SELECT * from "movies"
+        WHERE "userId" = $1
         ORDER by "movieId"
         `;
-        const result = await db.query(sql);
+        const result = await db.query(sql, [userId]);
 
         res.json(result.rows);
     } catch (err) {
@@ -30,6 +42,12 @@ router.get('/movies', async (req, res, next) => {
 // GET a movies by ID
 router.get('/movies/:movieId', async (req, res, next) => {
     try {
+
+        const userId = Number(req.user?.userId);
+        if (!userId) {
+            throw new ClientError(401, 'Authentication required');
+        }
+
         const id = Number(req.params.movieId);
         if (!id) {
             console.warn(`Invalid movie Id provided: ${req.params.movieId}`);
@@ -39,9 +57,9 @@ router.get('/movies/:movieId', async (req, res, next) => {
 
         const sql = `
         SELECT * from "movies"
-        WHERE "movieId" = $1
+        WHERE "movieId" = $1 AND "userId" = $2
         `;
-        const result = await db.query(sql, [id]);
+        const result = await db.query(sql, [id, userId]);
 
         if (result.rows.length === 0) {
             console.warn(`Movie with id ${id} not found`);
@@ -58,6 +76,14 @@ router.get('/movies/:movieId', async (req, res, next) => {
 // POST a new property
 router.post('/movies', async (req, res, next) => {
     try {
+        // Verify user is authenticated
+        const userId = Number(req.user?.userId);
+        if (!userId) {
+            console.warn(`Invalid userId provided: ${req.user?.userId}`);
+
+            throw new ClientError(401, 'Authentication required');
+        }
+
         const { title, summary, imdbLink, rating } = req.body
 
         if (!title || !imdbLink || !rating) {
@@ -70,16 +96,17 @@ router.post('/movies', async (req, res, next) => {
 
         const sql = `
         INSERT INTO "movies" (
+        "userId",
         "title",
         "summary",
         "imdbLink",
         "rating")
-        VALUES ($1, $2, $3, $4)
+        VALUES ($1, $2, $3, $4, $5)
         RETURNING *`
 
 
         const params = [
-            title, summary, imdbLink, rating
+            userId, title, summary, imdbLink, rating
         ];
 
         const result = await db.query(sql, params);
@@ -95,10 +122,28 @@ router.post('/movies', async (req, res, next) => {
 // PUT to update a property
 router.put('/movies/:movieId', async (req, res, next) => {
     try {
+
+        // Verify user is authenticated
+        const userId = Number(req.user?.userId);
+        if (!userId) {
+            throw new ClientError(401, 'Authentication required');
+        }
+
         const id = Number(req.params.movieId);
         if (!id) {
             console.warn('Invalid movie id provided:', req.params.movieId);
             throw new ClientError(400, 'movie id is required');
+        }
+
+        // Verify Owner
+        const verifyOwnerSql = `
+            SELECT * FROM "movies" 
+            WHERE "id" = $1 AND "userId" = $2
+            `;
+        const ownershipResult = await db.query(verifyOwnerSql, [id, userId]);
+
+        if (ownershipResult.rows.length === 0) {
+            throw new ClientError(403, 'Not authorized to update this property');
         }
 
         const {
@@ -138,17 +183,33 @@ router.put('/movies/:movieId', async (req, res, next) => {
 // DELETE a movie
 router.delete('/movies/:movieId', async (req, res, next) => {
     try {
+
+        const userId = Number(req.user?.userId);
+        if (!userId) {
+            throw new ClientError(401, 'Authentication required');
+        }
+
         const id = Number(req.params.movieId);
         if (!id) {
             console.warn('Invalid movie id provided:', req.params.movieId);
             throw new ClientError(400, 'movie id is required');
         }
 
+        // Verify ownership
+        const verifyOwnerSql = `
+        SELECT * FROM "movies" 
+        WHERE "id" = $1 AND "userId" = $2
+        `;
+        const ownershipResult = await db.query(verifyOwnerSql, [id, userId]);
+        if (ownershipResult.rows.length === 0) {
+            throw new ClientError(403, 'Not authorized to delete this property');
+        }
+
         const sql = `
-      DELETE FROM "movies"
-      WHERE "movieId" = $1
-      RETURNING *
-    `;
+        DELETE FROM "movies"
+        WHERE "movieId" = $1
+        RETURNING *
+        `;
 
         const result = await db.query(sql, [id]);
 

@@ -15,10 +15,13 @@
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "httpie": "^1.1.2",
+    "jsonwebtoken": "^9.0.2",
+    "jsw": "^4.0.2",
     "pg": "^8.16.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.2",
+    "@types/jsonwebtoken": "^9.0.9",
     "@types/node": "^22.15.23",
     "@types/pg": "^8.15.2",
     "nodemon": "^3.1.10",
